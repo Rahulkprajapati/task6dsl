@@ -63,7 +63,7 @@ fi''')
     }
 }
 
-job('job_4'){
+job('job4'){
                     scm{
                               github('Rahulkprajapati/groovy2code', 'master')
                        }
