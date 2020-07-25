@@ -1,0 +1,92 @@
+job("job1"){
+             	
+              scm {
+                               github('Rahulkprajapati/groovy1code', 'master')
+                       }
+              triggers {
+                                  upstream('seed', 'SUCCESS')
+                            }
+              steps{
+                             shell(''' if ls / | grep code 
+                                         then
+                                         cp -rvf * /code
+                                         else
+                                         mkdir /code
+                                         cp -rvf * /code
+                                         fi''')
+                   }
+}
+
+
+job('job2'){
+                   
+	 triggers {
+                                  upstream('job1', 'SUCCESS')
+                            }
+                   steps{
+                            shell(''' if ls /code/ | grep .php
+                                      then
+                                      kubectl create -f /webd.yaml
+                                      podname=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
+                                      sleep 60
+                                      kubectl cp /code/*.php $podname:/var/www/html/
+                                      kubectl expose deploy deploymypage --port=80 --type=NodePort
+                                      fi
+
+                                      if ls /code/ | grep .html
+                                      then
+                                      kubectl create -f /devtsk3.2.yml
+                                      podname=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
+                                      sleep 60
+                                      kubectl cp /code/*.html $podname:/usr/local/apache2/htdocs/
+                                      kubectl expose deploy deploymypage --port=80 --type=NodePort
+                                      fi''')
+     }
+}
+
+
+job('job3'){
+                    triggers {
+                                  upstream('job2', 'SUCCESS')
+                            }
+                     steps{
+                                shell(''' port=$(kubectl get -o json service | jq .items[0].spec.ports[].nodePort)
+
+export status=$(curl -s -i -w "%{http_code}" -o /dev/null 192.168.99.103:$port)
+if [ $status==200 ]
+then
+exit 0
+else 
+sudo python3.6 /sentmail.py
+exit 1
+fi''')
+    }
+}
+
+job('job_4'){
+                    scm{
+                              github('Rahulkprajapati/groovy2code', 'master')
+                       }
+                    
+                    steps{
+                               shell('''cp -rvf * /code/
+podname=$(kubectl get pods -o=jsonpath='{.items[0].metadata.name}')
+if  kubectl get deploy -o json | jq .items[0].spec.template.spec.containers[].image | grep httpd
+then
+kubectl cp /code/* $podname:/usr/local/apache2/httpd/ 
+else
+kubectl cp /code/* $podname:/var/www/html/
+fi''')
+    }
+}
+
+buildPipelineView('project6') {
+    filterBuildQueue()
+    filterExecutors()
+    title('Pipeline')
+    displayedBuilds(3)
+    selectedJob('job1')
+    alwaysAllowManualTrigger()
+    showPipelineParameters()
+    refreshFrequency(10)
+}
